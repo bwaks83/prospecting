@@ -322,8 +322,10 @@ activateIndustry();
  bar.innerHTML='<p role="status" id="shared-message">Connecting to shared statuses…</p><form id="shared-login"><label>Email <input name="email" type="email" autocomplete="email" required style="padding:8px;margin:6px;background:#111;color:white;border:1px solid #888;border-radius:4px"></label><button class="filter" type="submit">Send sign-in link</button></form><button class="filter" id="shared-logout" hidden>Sign out</button>';
  document.querySelector('.dashboard-header').after(bar);
  const message=bar.querySelector('#shared-message'),form=bar.querySelector('form'),logout=bar.querySelector('#shared-logout');
+ logout.style.cssText='margin:20px 16px;align-self:flex-start';
+ document.getElementById('industry-navigation').after(logout);
  let client,session=null,refreshing=false,sessionVersion=0;
- function say(text){message.textContent=text;}
+ function say(text){bar.hidden=false;message.textContent=text;}
  async function refresh(){
   if(!session||refreshing)return;
   refreshing=true;const version=sessionVersion;
@@ -335,7 +337,7 @@ activateIndustry();
    if(result.error)throw result.error;
    if(version!==sessionVersion)return;
    const next={};for(const row of result.data){const key=outreachKey(row.industry,row.prospect_name);next[key]={...next[key],[row.channel]:row.status};}
-   sharedOverrides=next;sharedStore.ready=true;render();say('Shared statuses connected · '+session.user.email+' · refreshes every 15 seconds');
+   sharedOverrides=next;sharedStore.ready=true;render();bar.hidden=true;
   }catch(error){if(version===sessionVersion){sharedStore.ready=false;say('Shared statuses unavailable: '+error.message);}}
   finally{refreshing=false;}
  }
