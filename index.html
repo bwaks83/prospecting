@@ -126,6 +126,9 @@ html.details-open{overflow:hidden}
       <button class="filter" data-status="Initial Research">Initial Research</button>
       <button class="filter" data-status="Needs Validation">Needs Validation</button>
       <button class="filter" data-status="Needs Validation" data-building-validation hidden>RV · Status to confirm</button>
+      <button type="button" class="filter active" data-outreach-filter="all" aria-pressed="true">All outreach</button>
+      <button type="button" class="filter" data-outreach-filter="contacted" aria-pressed="false">Contacted</button>
+      <button type="button" class="filter" data-outreach-filter="not-contacted" aria-pressed="false">Not contacted</button>
       <select id="categoryFilter" class="filter" aria-label="Filter by segment"><option value="all">All segments</option></select>
     </div>
     <label class="searchbox" aria-label="Search prospects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10.8" cy="10.8" r="6.9"></circle><path d="m16 16 5 5"></path></svg><input id="search" type="search" placeholder="Search prospects…" autocomplete="off"></label><div class="result-count"><strong id="shownCount">38</strong> prospects</div>
@@ -158,6 +161,7 @@ let prospects=industries[activeIndustry].prospects;
 const industryState=new Map();
 const grid=document.getElementById('grid'), search=document.getElementById('search'), categoryFilter=document.getElementById('categoryFilter');
 let activeStatus='all';
+let activeOutreachFilter='all';
 
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function displayFootprint(p){return p.stores}
@@ -181,6 +185,7 @@ function getOutreachStatus(industry,p,channel){const key=outreachKey(industry,p.
 function contactOutreachKey(industry,name,id){return JSON.stringify([industry,name,id])}
 function contactIdentity(c){return c.id||c.email?.trim().toLowerCase()||c.name.trim().toLowerCase()}
 function getContactStatus(industry,p,c,channel){const key=contactOutreachKey(industry,p.name,contactIdentity(c));const status=(sharedEnabled?sharedOverrides:outreachOverrides)[key]?.[channel]??'none';return Object.hasOwn(outreachStatusLabels,status)?status:'none'}
+function hasPriorOutreach(industry,p){return outreachChannels.some(channel=>getOutreachStatus(industry,p,channel.key)!=='none'||(p.contacts||[]).some(contact=>getContactStatus(industry,p,contact,channel.key)!=='none'))}
 function renderContactOutreach(p,c){const id=contactIdentity(c);return `<div class="contact-outreach" data-contact-id="${escapeHtml(id)}" data-company-name="${escapeHtml(p.name)}" data-industry="${escapeHtml(activeIndustry)}"><div class="outreach-indicators" role="group" aria-label="Outreach for ${escapeHtml(c.name)}">${outreachChannels.map(channel=>{const status=getContactStatus(activeIndustry,p,c,channel.key);return `<div class="outreach-channel"><svg class="outreach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${channel.icon}</svg><button type="button" class="outreach-dot" data-state="${status}" data-contact-channel="${channel.key}" title="${escapeHtml(channel.label+': '+outreachStatusLabels[status])}" aria-label="${escapeHtml(c.name+' · '+channel.label+': '+outreachStatusLabels[status])}" aria-haspopup="dialog" aria-controls="outreach-editor"></button><span class="recipient-meta">${channel.label}</span></div>`}).join('')}</div></div>`}
 function refreshContactIndicators(){document.querySelectorAll('.contact-outreach').forEach(group=>{const p=industries[group.dataset.industry]?.prospects.find(p=>p.name===group.dataset.companyName);const c=p?.contacts?.find(c=>contactIdentity(c)===group.dataset.contactId);if(!c)return;group.querySelectorAll('[data-contact-channel]').forEach(button=>{const channel=button.dataset.contactChannel,status=getContactStatus(group.dataset.industry,p,c,channel);button.dataset.state=status;button.title=outreachChannels.find(x=>x.key===channel).label+': '+outreachStatusLabels[status];button.setAttribute('aria-label',c.name+' · '+button.title);});});}
 function renderOutreachIndicators(p,index){return `<div class="outreach-indicators" role="group" aria-label="Outreach status for ${escapeHtml(p.name)}">${outreachChannels.map(channel=>{const status=getOutreachStatus(activeIndustry,p,channel.key);const label=channel.label+': '+outreachStatusLabels[status];return `<div class="outreach-channel"><svg class="outreach-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="${escapeHtml(channel.label)}"><title>${escapeHtml(channel.label)}</title>${channel.icon}</svg><button type="button" class="outreach-dot" data-state="${status}" data-outreach-index="${index}" data-outreach-channel="${channel.key}" title="${escapeHtml(label)} — click to update" aria-label="${escapeHtml(p.name+': '+label+'. Update status')}" aria-haspopup="dialog" aria-controls="outreach-editor"></button></div>`}).join('')}</div>`}
@@ -202,7 +207,7 @@ function renderBuildingResearch(p){return `<dl class="dialog-summary">${building
 function buildingField(value){const text=String(value??'');if(text.startsWith('https://')||text.startsWith('http://'))return `<a href="${escapeHtml(text)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`;if(text.includes('@')&&!text.includes(' '))return `<a href="mailto:${escapeHtml(text)}">${escapeHtml(text)}</a>`;return escapeHtml(text);}
 
 function makeCard(p,i){if(activeIndustry==='developers')return makeDeveloperCard(p,i);if(activeIndustry==='buildings')return makeBuildingCard(p,i);return `<article class="card"><div class="card-body"><div class="card-heading"><h2><button type="button" class="prospect-title" id="prospect-${i}" data-prospect-index="${i}" aria-haspopup="dialog" aria-controls="prospect-dialog">${escapeHtml(p.name)}</button></h2>${renderOutreachIndicators(p,i)}</div><div class="segment">${escapeHtml(p.category)}</div><div class="rule"></div><div class="detail-row"><span>${escapeHtml(industries[activeIndustry].footprintLabel)}</span><span class="value" title="${escapeHtml(p.storeNote||'')}">${escapeHtml(displayFootprint(p))}</span></div><div class="detail-row"><span>${escapeHtml(industries[activeIndustry].revenueLabel)}</span><span class="value" title="${escapeHtml(p.revenueNote||'')}" data-source="${escapeHtml(p.revenueSource||'')}">${escapeHtml(p.revenue)}</span></div><div class="detail-row"><span>Segment</span><span class="value">${escapeHtml(p.category)}</span></div><div class="detail-row"><span>Country of origin</span><span class="value" title="${escapeHtml(p.originNote)}">${escapeHtml(p.countryOfOrigin)}</span></div></div></article>`}
-function render(){refreshContactIndicators();const q=search.value.trim().toLocaleLowerCase('en-US'),cat=categoryFilter.value;const rows=prospects.map((p,i)=>({...p,_i:i})).filter(p=>(activeStatus==='all'||p.status===activeStatus)&&(cat==='all'||p.category===cat)&&(!q||[p.name,p.category,p.countryOfOrigin,p.stores,p.revenue,p.reason,p.ownership,p.examples,p.management,p.developer,p.architecture,p.salesMarketing,p.notes,p.buildingTag,...(p.buildings||[]).map(b=>b.name)].join(' ').toLocaleLowerCase('en-US').includes(q))).sort((a,b)=>{const count=p=>{if(activeIndustry==='developers')return p.mappedBuildingCount;const m=String(p.stores).replace(/,/g,'').match(/\d+/);return m?Number(m[0]):-1};return count(b)-count(a)||a.name.localeCompare(b.name,'en-US')});document.getElementById('shownCount').textContent=rows.length;grid.innerHTML=rows.length?rows.map((p,i)=>makeCard(p,p._i)).join(''):'<div class="empty">No prospects match this search.</div>'}
+function render(){refreshContactIndicators();const q=search.value.trim().toLocaleLowerCase('en-US'),cat=categoryFilter.value;const rows=prospects.map((p,i)=>({...p,_i:i})).filter(p=>(activeOutreachFilter==='all'||hasPriorOutreach(activeIndustry,p)===(activeOutreachFilter==='contacted'))&&(activeStatus==='all'||p.status===activeStatus)&&(cat==='all'||p.category===cat)&&(!q||[p.name,p.category,p.countryOfOrigin,p.stores,p.revenue,p.reason,p.ownership,p.examples,p.management,p.developer,p.architecture,p.salesMarketing,p.notes,p.buildingTag,...(p.buildings||[]).map(b=>b.name)].join(' ').toLocaleLowerCase('en-US').includes(q))).sort((a,b)=>{const count=p=>{if(activeIndustry==='developers')return p.mappedBuildingCount;const m=String(p.stores).replace(/,/g,'').match(/\d+/);return m?Number(m[0]):-1};return count(b)-count(a)||a.name.localeCompare(b.name,'en-US')});document.getElementById('shownCount').textContent=rows.length;grid.innerHTML=rows.length?rows.map((p,i)=>makeCard(p,p._i)).join(''):'<div class="empty">No prospects match this search.</div>'}
 const prospectDialog=document.getElementById('prospect-dialog');
 let dialogTrigger=null;
 function renderRecipients(p){
@@ -247,6 +252,7 @@ prospectDialog.addEventListener('close',()=>{
  if(dialogTrigger?.isConnected)dialogTrigger.focus();
  dialogTrigger=null;
 });
+document.querySelectorAll('[data-outreach-filter]').forEach(button=>button.addEventListener('click',()=>{activeOutreachFilter=button.dataset.outreachFilter;document.querySelectorAll('[data-outreach-filter]').forEach(option=>{const selected=option===button;option.classList.toggle('active',selected);option.setAttribute('aria-pressed',String(selected))});render()}));
 search.addEventListener('input',render);categoryFilter.addEventListener('change',render);document.querySelectorAll('.filter[data-status]').forEach(b=>b.addEventListener('click',()=>{activeStatus=b.dataset.status;document.querySelectorAll('.filter[data-status]').forEach(x=>x.classList.toggle('active',x===b));render()}));
 
 
@@ -309,7 +315,7 @@ industryNavigation.innerHTML=Object.entries(industries).map(([key,industry])=>`<
 function activateIndustry(){
  const requested=location.hash.slice(1);
  const next=Object.prototype.hasOwnProperty.call(industries,requested)?requested:'fashion';
- industryState.set(activeIndustry,{query:search.value,category:categoryFilter.value,status:activeStatus});
+ industryState.set(activeIndustry,{query:search.value,category:categoryFilter.value,status:activeStatus,outreach:activeOutreachFilter});
  if(prospectDialog.open)prospectDialog.close();
  activeIndustry=next;
  const industry=industries[next];
@@ -318,7 +324,8 @@ function activateIndustry(){
  document.querySelectorAll('.filter[data-status]').forEach((button,i)=>button.hidden=next==='developers'&&i>0);
  categoryFilter.hidden=next==='developers';
  const state=industryState.get(next)||{query:'',category:'all',status:'all'};
- search.value=state.query;activeStatus=state.status;
+ search.value=state.query;activeStatus=state.status;activeOutreachFilter=state.outreach||'all';
+ document.querySelectorAll('[data-outreach-filter]').forEach(button=>{const selected=button.dataset.outreachFilter===activeOutreachFilter;button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected))});
  const statuses=next==='buildings'?[['all','All'],['Completed','CP · Completed'],['Under Development','UD · Under Development'],['Needs Validation','RV · Status to confirm']]:[['all','All'],['Initial Research','Initial Research'],['Needs Validation','Needs Validation']];
  document.querySelectorAll('.filter[data-status]').forEach((button,i)=>{const option=statuses[i];button.hidden=!option||(next==='developers'&&i>0);if(option){button.dataset.status=option[0];button.textContent=option[1]}});
  categoryFilter.innerHTML='<option value="all">All segments</option>';
